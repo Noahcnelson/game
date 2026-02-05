@@ -3,107 +3,142 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Simple Snake Game</title>
+    <title>Oregon Trail - Minimalist</title>
     <style>
         body {
+            background-color: #1a1a1a;
+            color: #2ecc71;
+            font-family: "Courier New", Courier, monospace;
             display: flex;
             justify-content: center;
-            align-items: center;
-            height: 100vh;
-            margin: 0;
-            background-color: #2c3e50;
-            color: white;
-            font-family: Arial, sans-serif;
-            flex-direction: column;
+            padding: 20px;
         }
-        canvas {
-            border: 5px solid #ecf0f1;
-            box-shadow: 0 0 20px rgba(0,0,0,0.5);
-            background-color: #000;
+        #game-container {
+            max-width: 600px;
+            width: 100%;
+            background: #000;
+            padding: 20px;
+            border: 2px solid #2ecc71;
+            box-shadow: 0 0 15px rgba(46, 204, 113, 0.3);
         }
-        h1 { margin-bottom: 10px; }
+        #log {
+            height: 300px;
+            overflow-y: auto;
+            border-bottom: 1px solid #2ecc71;
+            margin-bottom: 20px;
+            padding-bottom: 10px;
+        }
+        .stats { display: flex; justify-content: space-between; margin-bottom: 20px; font-size: 0.9em; color: #f1c40f; }
+        button {
+            background: #2ecc71;
+            border: none;
+            color: black;
+            padding: 10px 15px;
+            margin: 5px;
+            cursor: pointer;
+            font-weight: bold;
+            font-family: "Courier New", Courier, monospace;
+        }
+        button:hover { background: #27ae60; }
+        button:disabled { background: #555; cursor: not-allowed; }
     </style>
 </head>
 <body>
 
-    <h1>Score: <span id="score">0</span></h1>
-    <canvas id="snakeGame" width="400" height="400"></canvas>
+<div id="game-container">
+    <h2 style="text-align:center">OREGON TRAIL</h2>
+    <div class="stats">
+        <span>Miles: <span id="dist">2000</span> left</span>
+        <span>Food: <span id="food">500</span> lbs</span>
+        <span>Health: <span id="hp">100</span>%</span>
+    </div>
+    <div id="log">
+        <p>Welcome, Traveler. You are in Independence, Missouri. You have 2000 miles to reach Oregon. Good luck.</p>
+    </div>
+    <div id="controls">
+        <button onclick="travel()">Travel</button>
+        <button onclick="hunt()">Hunt for Food</button>
+        <button onclick="rest()">Rest</button>
+    </div>
+</div>
 
-    <script>
-        const canvas = document.getElementById("snakeGame");
-        const ctx = canvas.getContext("2d");
-        const scoreElement = document.getElementById("score");
+<script>
+    let miles = 2000;
+    let food = 500;
+    let health = 100;
+    const log = document.getElementById('log');
 
-        const box = 20;
-        let score = 0;
-        let snake = [{ x: 9 * box, y: 10 * box }];
-        let food = {
-            x: Math.floor(Math.random() * 19 + 1) * box,
-            y: Math.floor(Math.random() * 19 + 1) * box
-        };
-        let d;
+    function updateDisplay() {
+        document.getElementById('dist').innerText = miles;
+        document.getElementById('food').innerText = food;
+        document.getElementById('hp').innerText = health;
+        log.scrollTop = log.scrollHeight; // Auto-scroll
+        
+        if (miles <= 0) endGame("🏆 You made it to Oregon! You are a legend.");
+        if (food <= 0) endGame("💀 You ran out of food and starved.");
+        if (health <= 0) endGame("💀 You died of dysentery.");
+    }
 
-        document.addEventListener("keydown", direction);
+    function addLog(text, color = "#2ecc71") {
+        const p = document.createElement('p');
+        p.innerText = "> " + text;
+        p.style.color = color;
+        log.appendChild(p);
+    }
 
-        function direction(event) {
-            if(event.keyCode == 37 && d != "RIGHT") d = "LEFT";
-            else if(event.keyCode == 38 && d != "DOWN") d = "UP";
-            else if(event.keyCode == 39 && d != "LEFT") d = "RIGHT";
-            else if(event.keyCode == 40 && d != "UP") d = "DOWN";
+    function randomEvent() {
+        const chance = Math.random();
+        if (chance < 0.15) {
+            const damage = Math.floor(Math.random() * 20) + 10;
+            health -= damage;
+            addLog(`You got dysentery! Health -${damage}`, "#e74c3c");
+        } else if (chance < 0.25) {
+            addLog("A heavy storm slows you down.", "#3498db");
+            return 5; // slow progress
+        } else if (chance < 0.35) {
+            const foundFood = Math.floor(Math.random() * 40) + 10;
+            food += foundFood;
+            addLog(`You found an abandoned wagon! +${foundFood} lbs of food.`, "#f1c40f");
         }
+        return 0;
+    }
 
-        function collision(head, array) {
-            for(let i = 0; i < array.length; i++) {
-                if(head.x == array[i].x && head.y == array[i].y) return true;
-            }
-            return false;
-        }
+    function travel() {
+        let move = Math.floor(Math.random() * 50) + 70;
+        let penalty = randomEvent();
+        move -= (penalty || 0);
+        
+        miles -= move;
+        food -= 30;
+        health -= 2;
+        addLog(`You traveled ${move} miles.`);
+        updateDisplay();
+    }
 
-        function draw() {
-            ctx.fillStyle = "black";
-            ctx.fillRect(0, 0, canvas.width, canvas.height);
+    function hunt() {
+        let caught = Math.floor(Math.random() * 80) + 20;
+        food += caught;
+        health -= 5; // Hunting is tiring
+        addLog(`You went hunting and got ${caught} lbs of meat.`, "#f1c40f");
+        updateDisplay();
+    }
 
-            for(let i = 0; i < snake.length; i++) {
-                ctx.fillStyle = (i == 0) ? "#2ecc71" : "#27ae60";
-                ctx.fillRect(snake[i].x, snake[i].y, box, box);
-                ctx.strokeStyle = "black";
-                ctx.strokeRect(snake[i].x, snake[i].y, box, box);
-            }
+    function rest() {
+        health = Math.min(100, health + 15);
+        food -= 10;
+        addLog("You rested by the campfire. Health restored.");
+        updateDisplay();
+    }
 
-            ctx.fillStyle = "#e74c3c";
-            ctx.fillRect(food.x, food.y, box, box);
+    function endGame(msg) {
+        addLog(msg, "white");
+        document.querySelectorAll("button").forEach(b => b.disabled = true);
+        const btn = document.createElement("button");
+        btn.innerText = "Restart";
+        btn.onclick = () => location.reload();
+        document.getElementById("controls").appendChild(btn);
+    }
+</script>
 
-            let snakeX = snake[0].x;
-            let snakeY = snake[0].y;
-
-            if( d == "LEFT") snakeX -= box;
-            if( d == "UP") snakeY -= box;
-            if( d == "RIGHT") snakeX += box;
-            if( d == "DOWN") snakeY += box;
-
-            if(snakeX == food.x && snakeY == food.y) {
-                score++;
-                scoreElement.innerHTML = score;
-                food = {
-                    x: Math.floor(Math.random() * 19 + 1) * box,
-                    y: Math.floor(Math.random() * 19 + 1) * box
-                };
-            } else {
-                snake.pop();
-            }
-
-            let newHead = { x: snakeX, y: snakeY };
-
-            if(snakeX < 0 || snakeX >= canvas.width || snakeY < 0 || snakeY >= canvas.height || collision(newHead, snake)) {
-                clearInterval(game);
-                alert("Game Over! Score: " + score);
-                location.reload(); 
-            }
-
-            snake.unshift(newHead);
-        }
-
-        let game = setInterval(draw, 100);
-    </script>
 </body>
 </html>
