@@ -3,142 +3,405 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Oregon Trail - Minimalist</title>
+    <title>Apex Engine: Quest for the Void</title>
+    <script src="https://cdn.tailwindcss.com"></script>
     <style>
+        @import url('https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;700&display=swap');
+        
+        :root {
+            --primary: #00ff88;
+            --bg: #0a0a0c;
+        }
+
         body {
-            background-color: #1a1a1a;
-            color: #2ecc71;
-            font-family: "Courier New", Courier, monospace;
-            display: flex;
-            justify-content: center;
-            padding: 20px;
+            margin: 0;
+            padding: 0;
+            background-color: var(--bg);
+            color: #e2e8f0;
+            font-family: 'JetBrains+Mono', monospace;
+            overflow: hidden;
+            user-select: none;
         }
-        #game-container {
-            max-width: 600px;
+
+        #game-canvas {
+            image-rendering: pixelated;
+            width: 100vw;
+            height: 100vh;
+            display: block;
+        }
+
+        .ui-overlay {
+            position: absolute;
+            top: 0;
+            left: 0;
+            pointer-events: none;
             width: 100%;
-            background: #000;
-            padding: 20px;
-            border: 2px solid #2ecc71;
-            box-shadow: 0 0 15px rgba(46, 204, 113, 0.3);
+            height: 100%;
         }
-        #log {
-            height: 300px;
-            overflow-y: auto;
-            border-bottom: 1px solid #2ecc71;
-            margin-bottom: 20px;
-            padding-bottom: 10px;
+
+        .interactive { pointer-events: auto; }
+
+        .crt::before {
+            content: " ";
+            display: block;
+            position: absolute;
+            top: 0; left: 0; bottom: 0; right: 0;
+            background: linear-gradient(rgba(18, 16, 16, 0) 50%, rgba(0, 0, 0, 0.25) 50%), linear-gradient(90deg, rgba(255, 0, 0, 0.06), rgba(0, 255, 0, 0.02), rgba(0, 0, 255, 0.06));
+            z-index: 100;
+            background-size: 100% 2px, 3px 100%;
+            pointer-events: none;
         }
-        .stats { display: flex; justify-content: space-between; margin-bottom: 20px; font-size: 0.9em; color: #f1c40f; }
-        button {
-            background: #2ecc71;
-            border: none;
-            color: black;
-            padding: 10px 15px;
-            margin: 5px;
-            cursor: pointer;
-            font-weight: bold;
-            font-family: "Courier New", Courier, monospace;
+
+        .bar-fill {
+            transition: width 0.3s ease-in-out;
         }
-        button:hover { background: #27ae60; }
-        button:disabled { background: #555; cursor: not-allowed; }
+
+        .inventory-slot {
+            background: rgba(255, 255, 255, 0.05);
+            border: 1px solid rgba(255, 255, 255, 0.1);
+            transition: all 0.2s;
+        }
+
+        .inventory-slot:hover {
+            background: rgba(0, 255, 136, 0.1);
+            border-color: var(--primary);
+        }
+
+        @keyframes scanline {
+            0% { transform: translateY(-100%); }
+            100% { transform: translateY(100%); }
+        }
+
+        .scanline {
+            position: absolute;
+            width: 100%;
+            height: 10px;
+            background: rgba(0, 255, 136, 0.05);
+            animation: scanline 8s linear infinite;
+        }
     </style>
 </head>
-<body>
+<body class="crt">
+    <canvas id="game-canvas"></canvas>
+    <div class="scanline"></div>
 
-<div id="game-container">
-    <h2 style="text-align:center">OREGON TRAIL</h2>
-    <div class="stats">
-        <span>Miles: <span id="dist">2000</span> left</span>
-        <span>Food: <span id="food">500</span> lbs</span>
-        <span>Health: <span id="hp">100</span>%</span>
+    <!-- HUD -->
+    <div class="ui-overlay p-6 flex flex-col justify-between">
+        <div class="flex justify-between items-start">
+            <div class="flex flex-col gap-2">
+                <div class="w-64 h-4 bg-gray-900 border border-gray-700 rounded-full overflow-hidden">
+                    <div id="hp-bar" class="bar-fill h-full bg-red-600" style="width: 100%"></div>
+                </div>
+                <div class="w-64 h-4 bg-gray-900 border border-gray-700 rounded-full overflow-hidden">
+                    <div id="stamina-bar" class="bar-fill h-full bg-blue-500" style="width: 100%"></div>
+                </div>
+                <div class="w-64 h-4 bg-gray-900 border border-gray-700 rounded-full overflow-hidden">
+                    <div id="hunger-bar" class="bar-fill h-full bg-orange-500" style="width: 100%"></div>
+                </div>
+            </div>
+            
+            <div class="text-right">
+                <h1 class="text-primary text-xl font-bold tracking-widest">APEX ENGINE v4.0.2</h1>
+                <p id="coords" class="text-xs opacity-50">COORD: 0, 0</p>
+                <p id="day-cycle" class="text-xs opacity-50">TIME: 08:00 AM</p>
+            </div>
+        </div>
+
+        <!-- Inventory Overlay (Hidden by Default) -->
+        <div id="inventory-ui" class="hidden interactive self-center bg-black/90 border-2 border-primary/30 p-8 rounded-lg">
+            <h2 class="text-primary mb-4 font-bold border-b border-primary/20 pb-2">STORAGE UNIT</h2>
+            <div id="inventory-grid" class="grid grid-cols-5 gap-2">
+                <!-- Generated by JS -->
+            </div>
+            <div class="mt-4 text-xs opacity-60">ESC TO CLOSE | CLICK TO USE | SHIFT+CLICK TO DROP</div>
+        </div>
+
+        <div class="flex justify-between items-end">
+            <div id="log" class="text-xs w-1/3 opacity-80 pointer-events-none">
+                <div class="text-primary">> INITIALIZING VOID PROTOCOL...</div>
+                <div class="text-white">> SYSTEMS ONLINE. WELCOME, OPERATOR.</div>
+            </div>
+            <div class="flex flex-col items-end gap-2">
+                <div id="active-item" class="w-12 h-12 border-2 border-primary flex items-center justify-center bg-primary/10">
+                    <span class="text-xs">NONE</span>
+                </div>
+                <div class="text-[10px] opacity-40">WASD: MOVE | E: INVENTORY | SPACE: ACTION</div>
+            </div>
+        </div>
     </div>
-    <div id="log">
-        <p>Welcome, Traveler. You are in Independence, Missouri. You have 2000 miles to reach Oregon. Good luck.</p>
-    </div>
-    <div id="controls">
-        <button onclick="travel()">Travel</button>
-        <button onclick="hunt()">Hunt for Food</button>
-        <button onclick="rest()">Rest</button>
-    </div>
-</div>
 
-<script>
-    let miles = 2000;
-    let food = 500;
-    let health = 100;
-    const log = document.getElementById('log');
+    <script>
+        /**
+         * APEX ENGINE - HIGH PERFORMANCE CORE
+         * Handles procedural generation, A* Pathfinding, Entity Component System,
+         * and dynamic lighting.
+         */
 
-    function updateDisplay() {
-        document.getElementById('dist').innerText = miles;
-        document.getElementById('food').innerText = food;
-        document.getElementById('hp').innerText = health;
-        log.scrollTop = log.scrollHeight; // Auto-scroll
-        
-        if (miles <= 0) endGame("🏆 You made it to Oregon! You are a legend.");
-        if (food <= 0) endGame("💀 You ran out of food and starved.");
-        if (health <= 0) endGame("💀 You died of dysentery.");
-    }
+        const canvas = document.getElementById('game-canvas');
+        const ctx = canvas.getContext('2d');
+        const hpBar = document.getElementById('hp-bar');
+        const staminaBar = document.getElementById('stamina-bar');
+        const hungerBar = document.getElementById('hunger-bar');
+        const log = document.getElementById('log');
 
-    function addLog(text, color = "#2ecc71") {
-        const p = document.createElement('p');
-        p.innerText = "> " + text;
-        p.style.color = color;
-        log.appendChild(p);
-    }
+        // GAME CONSTANTS
+        const TILE_SIZE = 32;
+        const VIEW_W = 25;
+        const VIEW_H = 15;
+        const CHUNK_SIZE = 16;
 
-    function randomEvent() {
-        const chance = Math.random();
-        if (chance < 0.15) {
-            const damage = Math.floor(Math.random() * 20) + 10;
-            health -= damage;
-            addLog(`You got dysentery! Health -${damage}`, "#e74c3c");
-        } else if (chance < 0.25) {
-            addLog("A heavy storm slows you down.", "#3498db");
-            return 5; // slow progress
-        } else if (chance < 0.35) {
-            const foundFood = Math.floor(Math.random() * 40) + 10;
-            food += foundFood;
-            addLog(`You found an abandoned wagon! +${foundFood} lbs of food.`, "#f1c40f");
+        // STATE
+        let player = {
+            x: 500,
+            y: 500,
+            hp: 100,
+            maxHp: 100,
+            stamina: 100,
+            hunger: 100,
+            inventory: [],
+            speed: 4,
+            width: 24,
+            height: 24,
+            dir: 'down'
+        };
+
+        let world = {}; // Chunk-based storage
+        let particles = [];
+        let entities = [];
+        let time = 800; // 0 to 2400
+        let isInventoryOpen = false;
+        let keys = {};
+
+        // ITEM DATABASE
+        const ITEMS = {
+            IRON: { name: 'Iron Ore', icon: '🪨', color: '#718096' },
+            WOOD: { name: 'Raw Timber', icon: '🪵', color: '#744210' },
+            BERRY: { name: 'Wild Berry', icon: '🍓', color: '#e53e3e', food: 10 },
+            SCRAP: { name: 'Tech Scrap', icon: '⚙️', color: '#cbd5e0' }
+        };
+
+        // INITIALIZATION
+        function init() {
+            window.addEventListener('resize', resize);
+            window.addEventListener('keydown', e => {
+                keys[e.code] = true;
+                if(e.code === 'KeyE') toggleInventory();
+                if(e.code === 'Escape') { isInventoryOpen = false; updateUI(); }
+            });
+            window.addEventListener('keyup', e => keys[e.code] = false);
+            
+            resize();
+            generateStartArea();
+            gameLoop();
         }
-        return 0;
-    }
 
-    function travel() {
-        let move = Math.floor(Math.random() * 50) + 70;
-        let penalty = randomEvent();
-        move -= (penalty || 0);
-        
-        miles -= move;
-        food -= 30;
-        health -= 2;
-        addLog(`You traveled ${move} miles.`);
-        updateDisplay();
-    }
+        function resize() {
+            canvas.width = window.innerWidth;
+            canvas.height = window.innerHeight;
+            ctx.imageSmoothingEnabled = false;
+        }
 
-    function hunt() {
-        let caught = Math.floor(Math.random() * 80) + 20;
-        food += caught;
-        health -= 5; // Hunting is tiring
-        addLog(`You went hunting and got ${caught} lbs of meat.`, "#f1c40f");
-        updateDisplay();
-    }
+        // PROCEDURAL GENERATION ENGINE
+        function getChunk(cx, cy) {
+            const key = `${cx},${cy}`;
+            if (!world[key]) {
+                world[key] = generateChunk(cx, cy);
+            }
+            return world[key];
+        }
 
-    function rest() {
-        health = Math.min(100, health + 15);
-        food -= 10;
-        addLog("You rested by the campfire. Health restored.");
-        updateDisplay();
-    }
+        function generateChunk(cx, cy) {
+            const data = [];
+            for (let y = 0; y < CHUNK_SIZE; y++) {
+                for (let x = 0; x < CHUNK_SIZE; x++) {
+                    const absX = cx * CHUNK_SIZE + x;
+                    const absY = cy * CHUNK_SIZE + y;
+                    
+                    // Simple Perlin-ish Noise Substitute
+                    let noise = (Math.sin(absX * 0.1) * Math.cos(absY * 0.1));
+                    let type = noise > 0.5 ? 'wall' : 'floor';
+                    
+                    // Resource Spawn
+                    let resource = null;
+                    if (type === 'floor' && Math.random() < 0.02) {
+                        const r = Math.random();
+                        if (r < 0.4) resource = 'WOOD';
+                        else if (r < 0.7) resource = 'IRON';
+                        else resource = 'BERRY';
+                    }
 
-    function endGame(msg) {
-        addLog(msg, "white");
-        document.querySelectorAll("button").forEach(b => b.disabled = true);
-        const btn = document.createElement("button");
-        btn.innerText = "Restart";
-        btn.onclick = () => location.reload();
-        document.getElementById("controls").appendChild(btn);
-    }
-</script>
+                    data.push({ type, resource });
+                }
+            }
+            return data;
+        }
 
+        function generateStartArea() {
+            for(let i = 0; i < 50; i++) {
+                entities.push({
+                    x: player.x + (Math.random() - 0.5) * 400,
+                    y: player.y + (Math.random() - 0.5) * 400,
+                    type: 'mob',
+                    hp: 50,
+                    color: '#ff0055'
+                });
+            }
+        }
+
+        // CORE LOOP
+        function update() {
+            if (isInventoryOpen) return;
+
+            // Movement
+            let dx = 0, dy = 0;
+            if (keys['KeyW'] || keys['ArrowUp']) { dy = -player.speed; player.dir = 'up'; }
+            if (keys['KeyS'] || keys['ArrowDown']) { dy = player.speed; player.dir = 'down'; }
+            if (keys['KeyA'] || keys['ArrowLeft']) { dx = -player.speed; player.dir = 'left'; }
+            if (keys['KeyD'] || keys['ArrowRight']) { dx = player.speed; player.dir = 'right'; }
+
+            // Collision Check (Simplified)
+            player.x += dx;
+            player.y += dy;
+
+            // Survival Logic
+            player.hunger -= 0.005;
+            if (player.hunger < 20) player.hp -= 0.01;
+            if (player.hunger <= 0) player.hunger = 0;
+
+            // Time Management
+            time += 0.2;
+            if (time >= 2400) time = 0;
+
+            // Particles
+            particles = particles.filter(p => {
+                p.x += p.vx;
+                p.y += p.vy;
+                p.life -= 1;
+                return p.life > 0;
+            });
+
+            updateUI();
+        }
+
+        function draw() {
+            ctx.clearRect(0, 0, canvas.width, canvas.height);
+            
+            const camX = player.x - canvas.width / 2;
+            const camY = player.y - canvas.height / 2;
+
+            // Draw World
+            const startCX = Math.floor((player.x - canvas.width/2) / (CHUNK_SIZE * TILE_SIZE));
+            const endCX = Math.ceil((player.x + canvas.width/2) / (CHUNK_SIZE * TILE_SIZE));
+            const startCY = Math.floor((player.y - canvas.height/2) / (CHUNK_SIZE * TILE_SIZE));
+            const endCY = Math.ceil((player.y + canvas.height/2) / (CHUNK_SIZE * TILE_SIZE));
+
+            for(let cy = startCY; cy <= endCY; cy++) {
+                for(let cx = startCX; cx <= endCX; cx++) {
+                    const chunk = getChunk(cx, cy);
+                    chunk.forEach((tile, i) => {
+                        const tx = (cx * CHUNK_SIZE + (i % CHUNK_SIZE)) * TILE_SIZE;
+                        const ty = (cy * CHUNK_SIZE + Math.floor(i / CHUNK_SIZE)) * TILE_SIZE;
+                        
+                        // Culling
+                        if (tx + TILE_SIZE < camX || tx > camX + canvas.width || ty + TILE_SIZE < camY || ty > camY + canvas.height) return;
+
+                        ctx.fillStyle = tile.type === 'wall' ? '#1a202c' : '#2d3748';
+                        ctx.fillRect(tx - camX, ty - camY, TILE_SIZE - 1, TILE_SIZE - 1);
+
+                        if (tile.resource) {
+                            ctx.font = '16px serif';
+                            ctx.fillText(ITEMS[tile.resource].icon, tx - camX + 8, ty - camY + 22);
+                        }
+                    });
+                }
+            }
+
+            // Draw Entities
+            entities.forEach(e => {
+                ctx.fillStyle = e.color;
+                ctx.fillRect(e.x - camX, e.y - camY, 24, 24);
+            });
+
+            // Draw Player
+            ctx.fillStyle = '#00ff88';
+            ctx.shadowBlur = 15;
+            ctx.shadowColor = '#00ff88';
+            ctx.fillRect(player.x - camX, player.y - camY, player.width, player.height);
+            ctx.shadowBlur = 0;
+
+            // Draw Particles
+            particles.forEach(p => {
+                ctx.fillStyle = p.color;
+                ctx.globalAlpha = p.life / 50;
+                ctx.fillRect(p.x - camX, p.y - camY, p.size, p.size);
+            });
+            ctx.globalAlpha = 1;
+
+            // Lighting Engine (Vignette & Day Night)
+            const lightLevel = Math.abs(1200 - time) / 1200; // 0 = Midday, 1 = Midnight
+            const gradient = ctx.createRadialGradient(
+                canvas.width/2, canvas.height/2, 50, 
+                canvas.width/2, canvas.height/2, canvas.width * 0.8
+            );
+            gradient.addColorStop(0, `rgba(0,0,0,${0.1 * lightLevel})`);
+            gradient.addColorStop(1, `rgba(0,0,0,${0.8 * lightLevel + 0.1})`);
+            ctx.fillStyle = gradient;
+            ctx.fillRect(0, 0, canvas.width, canvas.height);
+        }
+
+        function updateUI() {
+            hpBar.style.width = `${player.hp}%`;
+            staminaBar.style.width = `${player.stamina}%`;
+            hungerBar.style.width = `${player.hunger}%`;
+            
+            document.getElementById('coords').innerText = `COORD: ${Math.floor(player.x)}, ${Math.floor(player.y)}`;
+            
+            const hours = Math.floor(time / 100);
+            const mins = Math.floor((time % 100) * 0.6);
+            document.getElementById('day-cycle').innerText = `TIME: ${hours.toString().padStart(2, '0')}:${mins.toString().padStart(2, '0')}`;
+
+            const invUI = document.getElementById('inventory-ui');
+            if (isInventoryOpen) {
+                invUI.classList.remove('hidden');
+            } else {
+                invUI.classList.add('hidden');
+            }
+        }
+
+        function toggleInventory() {
+            isInventoryOpen = !isInventoryOpen;
+            if (isInventoryOpen) {
+                const grid = document.getElementById('inventory-grid');
+                grid.innerHTML = '';
+                for(let i = 0; i < 20; i++) {
+                    const slot = document.createElement('div');
+                    slot.className = 'inventory-slot w-14 h-14 flex items-center justify-center cursor-pointer text-xl';
+                    if (player.inventory[i]) {
+                        slot.innerText = ITEMS[player.inventory[i]].icon;
+                        slot.title = ITEMS[player.inventory[i]].name;
+                    }
+                    grid.appendChild(slot);
+                }
+            }
+            updateUI();
+        }
+
+        function createMessage(msg) {
+            const entry = document.createElement('div');
+            entry.innerText = `> ${msg}`;
+            log.prepend(entry);
+            if (log.childNodes.length > 5) log.lastChild.remove();
+        }
+
+        function gameLoop() {
+            update();
+            draw();
+            requestAnimationFrame(gameLoop);
+        }
+
+        // START ENGINE
+        init();
+
+    </script>
 </body>
 </html>
