@@ -1,17 +1,19 @@
-:root {
-  --bg: #060a1a;
-  --panel: #111a32;
-  --text: #d7e7ff;
-  --accent: #66f4ff;
-  --warn: #ff7373;
-  --good: #8aff8a;
-}
-
-* {(() => {
+(() => {
   "use strict";
 
   const canvas = document.getElementById("gameCanvas");
-  const ctx = canvas.getContext("2d");
+  const ctx = canvas?.getContext("2d");
+
+  if (!canvas || !ctx) {
+    const message = document.createElement("div");
+    message.style.padding = "16px";
+    message.style.color = "#ffb3b3";
+    message.style.fontFamily = "Segoe UI, sans-serif";
+    message.textContent =
+      "Chrono Serpent could not initialize because this browser does not support Canvas 2D.";
+    document.body.prepend(message);
+    return;
+  }
 
   const UI = {
     score: document.getElementById("score"),
@@ -44,6 +46,11 @@
       this.justPressed = new Set();
 
       window.addEventListener("keydown", (e) => {
+        if (["ArrowUp", "ArrowDown", "ArrowLeft", "ArrowRight", " "].includes(e.key)) {
+          e.preventDefault();
+        }
+
+        if (e.repeat) return;
         const key = e.key.toLowerCase();
         if (!this.keys.has(key)) {
           this.justPressed.add(key);
@@ -80,12 +87,16 @@
     }
 
     ensureCtx() {
+      const AudioCtor = window.AudioContext || window.webkitAudioContext;
+      if (!AudioCtor) return false;
+
       if (!this.ctx) {
-        this.ctx = new (window.AudioContext || window.webkitAudioContext)();
+        this.ctx = new AudioCtor();
       }
       if (this.ctx.state === "suspended") {
         this.ctx.resume();
       }
+      return true;
     }
 
     toggleMute() {
@@ -95,7 +106,7 @@
 
     beep(type, freq, duration, volume = 0.05) {
       if (!this.enabled) return;
-      this.ensureCtx();
+      if (!this.ensureCtx()) return;
       const osc = this.ctx.createOscillator();
       const gain = this.ctx.createGain();
       osc.type = type;
@@ -657,7 +668,7 @@
         game.mines.push(new Mine(this.head.x, this.head.y));
       }
 
-      if (input.consume(" ") && this.primaryCooldown <= 0) {
+      if ((input.consume(" ") || input.consume("space") || input.consume("spacebar")) && this.primaryCooldown <= 0) {
         this.primaryCooldown = 0.18;
         const spread = 0.09;
         for (let i = -1; i <= 1; i += 1) {
@@ -1205,165 +1216,3 @@
   const game = new Game();
   window.__chronoSnake = game;
 })();
-
-  box-sizing: border-box;
-}
-
-body {
-  margin: 0;
-  font-family: "Segoe UI", Tahoma, Geneva, Verdana, sans-serif;
-  color: var(--text);
-  background: radial-gradient(circle at top, #13234d, var(--bg) 48%, #02040d 100%);
-}
-
-.app-shell {
-  max-width: 1450px;
-  margin: 0 auto;
-  padding: 16px;
-}
-
-.top-bar {
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-  margin-bottom: 12px;
-  gap: 16px;
-}
-
-h1 {
-  margin: 0;
-  font-size: 1.4rem;
-  color: var(--accent);
-  text-shadow: 0 0 9px rgba(102, 244, 255, 0.45);
-}
-
-.top-actions {
-  display: flex;
-  gap: 8px;
-}
-
-button {
-  background: linear-gradient(180deg, #1e316a, #0f1d47);
-  border: 1px solid #4aa2ff;
-  color: #e8f4ff;
-  padding: 8px 14px;
-  border-radius: 8px;
-  cursor: pointer;
-  transition: transform 120ms ease, box-shadow 120ms ease;
-}
-
-button:hover {
-  transform: translateY(-1px);
-  box-shadow: 0 0 12px rgba(74, 162, 255, 0.5);
-}
-
-.layout {
-  display: grid;
-  grid-template-columns: minmax(600px, 1fr) 320px;
-  gap: 16px;
-}
-
-.game-area {
-  position: relative;
-  border: 1px solid #284e9a;
-  border-radius: 12px;
-  overflow: hidden;
-  background: linear-gradient(180deg, #071029, #05091d);
-  box-shadow: 0 0 28px rgba(34, 92, 194, 0.4);
-}
-
-canvas {
-  width: 100%;
-  height: auto;
-  display: block;
-  image-rendering: pixelated;
-}
-
-.overlay {
-  position: absolute;
-  inset: 0;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  text-align: center;
-  padding: 20px;
-  font-size: 1.2rem;
-  line-height: 1.5;
-  background: rgba(3, 7, 21, 0.72);
-  color: #dfeeff;
-}
-
-.hidden {
-  display: none;
-}
-
-.hud {
-  display: flex;
-  flex-direction: column;
-  gap: 10px;
-}
-
-.panel {
-  background: var(--panel);
-  border: 1px solid #2a3e7d;
-  border-radius: 10px;
-  padding: 12px;
-}
-
-.panel h2 {
-  margin: 0 0 8px;
-  font-size: 1.03rem;
-  color: #a4d4ff;
-}
-
-ul {
-  margin: 0;
-  padding-left: 16px;
-}
-
-li {
-  margin: 5px 0;
-}
-
-#missionList {
-  list-style: none;
-  padding-left: 0;
-}
-
-#missionList li {
-  border-left: 3px solid #3d5ea8;
-  padding-left: 8px;
-  margin-bottom: 7px;
-}
-
-#missionList li.done {
-  border-left-color: var(--good);
-  color: #a8ffb7;
-}
-
-#missionList li.failed {
-  border-left-color: var(--warn);
-  color: #ffb9b9;
-}
-
-@media (max-width: 1100px) {
-  .layout {
-    grid-template-columns: 1fr;
-  }
-
-  .hud {
-    display: grid;
-    grid-template-columns: repeat(2, 1fr);
-  }
-}
-
-@media (max-width: 700px) {
-  .hud {
-    grid-template-columns: 1fr;
-  }
-
-  .top-bar {
-    flex-direction: column;
-    align-items: stretch;
-  }
-}
